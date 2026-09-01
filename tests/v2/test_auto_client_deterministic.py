@@ -1,4 +1,5 @@
 from __future__ import annotations
+import builtins
 
 from types import ModuleType
 from typing import Any, cast
@@ -80,11 +81,17 @@ def test_build_openai_compatible_requires_api_key(
         )
 
 
-def test_build_openai_does_not_mask_runtime_import_errors(
+def test_build_openai_avoids_legacy_httpx_and_preserves_import_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     openai_module = ModuleType("openai")
-    httpx_module = ModuleType("httpx")
+
+    real_import = builtins.__import__
+
+    def reject_legacy_httpx(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "httpx":
+            raise AssertionError("_build_openai must not import legacy httpx")
+        return real_import(name, *args, **kwargs)
 
     class FakeClient:
         def __init__(self, **_kwargs: Any) -> None:
@@ -96,11 +103,9 @@ def test_build_openai_does_not_mask_runtime_import_errors(
     setattr(openai_module, "NotGiven", object)  # noqa: B010
     setattr(openai_module, "Timeout", float)  # noqa: B010
     setattr(openai_module, "not_given", object())  # noqa: B010
-    setattr(httpx_module, "Client", object)  # noqa: B010
-    setattr(httpx_module, "AsyncClient", object)  # noqa: B010
+    monkeypatch.setattr(builtins, "__import__", reject_legacy_httpx)
 
     monkeypatch.setitem(__import__("sys").modules, "openai", openai_module)
-    monkeypatch.setitem(__import__("sys").modules, "httpx", httpx_module)
 
     with pytest.raises(ImportError, match="socksio"):
         auto_client._build_openai(
