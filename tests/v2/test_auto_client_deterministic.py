@@ -81,8 +81,10 @@ def test_build_openai_compatible_requires_api_key(
         )
 
 
+@pytest.mark.parametrize("async_client", [False, True])
 def test_build_openai_avoids_legacy_httpx_and_preserves_import_errors(
     monkeypatch: pytest.MonkeyPatch,
+    async_client: bool,
 ) -> None:
     openai_module = ModuleType("openai")
 
@@ -111,7 +113,7 @@ def test_build_openai_avoids_legacy_httpx_and_preserves_import_errors(
         auto_client._build_openai(
             provider="openai",
             model_name="gpt-5",
-            async_client=False,
+            async_client=async_client,
             mode=Mode.TOOLS,
             api_key="test-key",
             kwargs={},
